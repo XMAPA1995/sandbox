@@ -1,0 +1,7 @@
+.retailer-product-image div {
+  width: 32px;
+  height: 32px;
+  background-size: contain;
+  background-position: center;
+  background-repeat: no-repeat;
+}

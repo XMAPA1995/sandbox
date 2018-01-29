@@ -1,0 +1,10 @@
+crowdfunding.open_modal_form:
+  path: '/admin/config/modal_form'
+  defaults:
+    _title: 'Modal Form'
+    _controller: '\Drupal\crowdfunding\Controller\CrowdfundingModuleController::openModalForm'
+  requirements:
+    _permission: 'administer site configuration'
+  options:
+    _admin_route: TRUE
+

@@ -1,0 +1,14 @@
+textarea {
+  font-family: monospace!important;
+  font-size: 14px!important;
+}
+.field-input-wrapper {
+  padding: 0 5px 0 0;
+  float: right;
+}
+.field-input-wrapper .field-input {
+  border: #e0e0e0 solid 1px;
+  text-align: right;
+  padding: 5px;
+  font-weight: bold;
+}

@@ -1,0 +1,6 @@
+name = Project formatters
+description = Custom fields formatters
+configure = admin/config/ts-formatter/config_form
+package = Project
+core = 7.x
+dependencies[] = field_formatter_settings

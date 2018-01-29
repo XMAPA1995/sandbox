@@ -1,0 +1,454 @@
+<?php
+/**
+ * @file
+ * Module file for the formatters module.
+ */
+
+/**
+ * Implements hook_menu().
+ */
+function formatters_menu() {
+  $items = array();
+  $items['node/%node/technical-specs'] = array(
+    'title' => 'Manage technical specs',
+    'page callback' => 'formatters_redirect',
+    'page arguments' => array(1),
+    'access arguments' => array('administer content types'),
+    'type' => MENU_LOCAL_TASK,
+  );
+  $items['admin/config/ts-formatter'] = array(
+    'title' => 'Fields formatter settings',
+    'position' => 'left',
+    'weight' => -100,
+    'page callback' => 'system_admin_menu_block_page',
+    'access arguments' => array('administer content types'),
+    'file' => 'system.admin.inc',
+    'file path' => drupal_get_path('module', 'system'),
+  );
+
+  $items['admin/config/ts-formatter/config_form'] = array(
+    'title' => 'Settings',
+    'description' => 'Module settings',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('formatters_admin_settings'),
+    'access arguments' => array('administer content types'),
+    'file' => 'formatters.admin.inc',
+  );
+
+  return $items;
+}
+
+/**
+ * Redirect function.
+ */
+function formatters_redirect($node) {
+  $path = '/admin/structure/types/manage/' . $node->type . '/display/technical_spec';
+  drupal_goto($path);
+}
+
+/**
+ * Implements hook_field_group_build_pre_render_alter().
+ *
+ * The Field group flag.
+ */
+function formatters_field_group_build_pre_render_alter(&$element) {
+  foreach ($element['#groups'] as $group) {
+    foreach ($group->children as $children) {
+      $element[$group->group_name][$children]['#is_group'] = TRUE;
+    }
+  }
+}
+
+/**
+ * Implements hook_entity_info_alter().
+ *
+ * View mode for referenced nodes.
+ * Template for this view mode: node--gear-type.tpl.php (Lines 105-119).
+ */
+function formatters_entity_info_alter(&$entity_info) {
+  $entity_info['node']['view modes']['technical_specs_ref'] = array(
+    'label' => t('Technical specs reference'),
+    'custom settings' => TRUE,
+  );
+}
+
+/**
+ * Implements hook_preprocess_node().
+ */
+function formatters_preprocess_node(&$variables) {
+  if ($variables['view_mode'] == 'technical_specs_ref') {
+    $variables['theme_hook_suggestions'][] = 'node__' . $variables['type'] . '__technical_specs_ref';
+  }
+}
+
+/**
+ * Implements hook_field_group_formatter_info().
+ */
+function formatters_field_group_formatter_info() {
+  $formatters = array();
+  $formatters['tech_specs'] = array(
+    'label' => t('Technical specs'),
+    'description' => t('Technical specs formatter.'),
+    'instance_settings' => array(
+      'tooltip' => '',
+      'template' => '',
+      'hide_empty' => 0,
+      'empty_symbol' => '',
+    ),
+  );
+
+  return array(
+    'form' => $formatters,
+    'display' => $formatters,
+  );
+}
+
+/**
+ * Implements hook_field_group_format_settings().
+ *
+ * Groups settings.
+ */
+function formatters_field_group_format_settings($group) {
+  // Add a wrapper for extra settings to use by others.
+  $form = array(
+    'instance_settings' => array(
+      '#tree' => TRUE,
+      '#weight' => 2,
+    ),
+  );
+  $field_group_types = field_group_formatter_info();
+  $mode = $group->mode == 'form' ? 'form' : 'display';
+  $group_formatter = $field_group_types[$mode][$group->format_type];
+  // Add optional instance_settings.
+  switch ($group->format_type) {
+    case 'tech_specs':
+      $form['instance_settings']['template'] = array(
+        '#title' => t('Group template'),
+        '#type' => 'textarea',
+        '#required' => TRUE,
+        '#default_value' => isset($group->format_settings['instance_settings']['template']) ? $group->format_settings['instance_settings']['template'] : $group_formatter['instance_settings']['template'],
+        '#description' => '<i>Enter your custom template for this group. </i></br><b>Example template:</b></br> [field_xxx] | - </br>[field_yyy]</br><b>Result example template:</b></br>field_xxx_value - field_yyy_value</br><b>Special symbols:</b></br>Space - <b>&amp;nbsp;</b></br> A line break in text - <b>&lt;br&gt;</b>',
+        '#rows' => 8,
+        '#weight' => 4,
+      );
+      $form['instance_settings']['tooltip'] = array(
+        '#title' => t('Tooltip'),
+        '#type' => 'textarea',
+        '#default_value' => isset($group->format_settings['instance_settings']['tooltip']) ? $group->format_settings['instance_settings']['tooltip'] : $group_formatter['instance_settings']['tooltip'],
+        '#description' => t('Enter your custom tooltip for this group.'),
+        '#weight' => 5,
+      );
+      $form['instance_settings']['hide_empty'] = array(
+        '#title' => t('Hide default empty symbols'),
+        '#type' => 'checkbox',
+        '#default_value' => isset($group->format_settings['instance_settings']['hide_empty']) ? $group->format_settings['instance_settings']['hide_empty'] : $group_formatter['instance_settings']['hide_empty'],
+        '#description' => 'Enable for hide default empty symbol.' . '<br><div><a href="/admin/config/ts-formatter/config_form" style="padding: 0;">Change this symbol</a></div>',
+        '#weight' => 6,
+        '#attributes' => array('class' => array('hide-empty')),
+      );
+      $form['instance_settings']['empty_symbol'] = array(
+        '#title' => t('Empty field symbol'),
+        '#type' => 'textfield',
+        '#default_value' => isset($group->format_settings['instance_settings']['empty_symbol']) ? $group->format_settings['instance_settings']['empty_symbol'] : $group_formatter['instance_settings']['empty_symbol'],
+        '#description' => t('Enter your custom symbol for empty fields.'),
+        '#weight' => 7,
+        '#attributes' => array('class' => array('empty-symbol')),
+        '#states' => array(
+          'visible' => array(
+            'input[name="fields[' . $group->group_name . '][format_settings][settings][instance_settings][hide_empty]' => array(
+              'checked' => TRUE,
+            ),
+          ),
+        ),
+      );
+      break;
+
+    default:
+  }
+  return $form;
+}
+
+/**
+ * Implements field_group_pre_render_<format-type>.
+ *
+ * Groups logic.
+ */
+function field_group_pre_render_tech_specs(&$element, $group, &$form) {
+  $settings = $group->format_settings['instance_settings'];
+  $node = $form['#node'];
+  foreach ($group->children as $child) {
+    if (isset($element[$child]['#this_empty'])) {
+      if (isset($settings['hide_empty']) && $settings['hide_empty'] == 1) {
+        if (count($element[$child]['#items']) == 1) {
+          $element[$child][0]['#markup'] = $settings['empty_symbol'];
+          $element[$child]['#items'][0]['value'] = $settings['empty_symbol'];
+        }
+        else {
+          foreach ($element[$child]['#items'] as $item) {
+            $element[$child][$item]['#markup'] = $settings['empty_symbol'];
+            $element[$child]['#items'][$item]['value'] = $settings['empty_symbol'];
+          }
+        }
+      }
+    }
+  }
+  if (!empty($settings['template'])) {
+    $subject = $settings['template'];
+    $delimeter_pattern = '/(((.+)(\|.*))*(\[.+\])(.*\|)*(.*))/';
+    preg_match_all($delimeter_pattern, $subject, $fields);
+    $field_and_prefix = array_combine($fields[5], $fields[3]);
+    $field_and_suffix = array_combine($fields[5], $fields[7]);
+    $all_fields = $fields[5];
+    $subject = str_replace("|", "", $subject);
+    $subject = str_replace("\n", "", $subject);
+
+    // Add prefix to fields.
+    foreach ($field_and_prefix as $machine_name => $field_prefix) {
+      $trimmed_field_name = substr($machine_name, 1, -1);
+      if (!empty($field_prefix) && !empty($element[$trimmed_field_name][0]['#markup']) && count($element[$trimmed_field_name]['#items']) == 1) {
+        if ($element[$trimmed_field_name][0]['#markup'] != variable_get('ts_empty_symbol')) {
+          $element[$trimmed_field_name][0]['#markup'] = $field_prefix . $element[$trimmed_field_name][0]['#markup'];
+        }
+        $subject = str_replace($field_prefix, '', $subject);
+      }
+    }
+    // Add suffix to fields.
+    foreach ($field_and_suffix as $machine_name_second => $field_suffix) {
+      $trimmed_field_name = substr($machine_name_second, 1, -1);
+      if (!empty($field_suffix) && !empty($element[$trimmed_field_name][0]['#markup']) && count($element[$trimmed_field_name]['#items']) == 1) {
+        if ($element[$trimmed_field_name][0]['#markup'] != variable_get('ts_empty_symbol')) {
+          $element[$trimmed_field_name][0]['#markup'] = $element[$trimmed_field_name][0]['#markup'] . $field_suffix;
+        }
+        $subject = str_replace($field_suffix, '', $subject);
+      }
+    }
+    // Replace tokens.
+    foreach ($all_fields as $key => $field) {
+      $trimmed_field_name = substr($field, 1, -1);
+      if (!empty($element[$trimmed_field_name][0]['#markup'])) {
+        if (count($element[$trimmed_field_name]['#items']) == 1) {
+          if ($element[$trimmed_field_name]['#field_type'] == 'node_reference') {
+            $display_field = field_view_field('node', $node, $trimmed_field_name, 'technical_spec');
+            if (!empty($display_field['#items'][0]['nid'])) {
+              $nid = $display_field['#items'][0]['nid'];
+              $n_load = node_load($nid);
+              $n_view = node_view($n_load, 'technical_specs_ref');
+              $output = drupal_render($n_view);
+              if (!empty($field_and_prefix[$field])) {
+                $output = $field_and_prefix[$field] . $output;
+              }
+              if (!empty($field_and_suffix[$field])) {
+                $output = $output . $field_and_suffix[$field];
+              }
+              $trim_output = trim($output);
+              if (!empty($trim_output)) {
+                $subject = str_replace($field, $output, $subject);
+              }
+              elseif (empty($trim_output)) {
+                $subject = str_replace($field, variable_get('ts_empty_symbol'), $subject);
+              }
+            }
+            else {
+              $subject = str_replace($field, variable_get('ts_empty_symbol'), $subject);
+            }
+          }
+
+          else {
+            $subject = str_replace($field, $element[$trimmed_field_name][0]['#markup'], $subject);
+          }
+        }
+        else {
+          $field_items = field_get_items('node', $node, $trimmed_field_name);
+          $string = '';
+          if (is_array($field_items)) {
+            foreach ($field_items as $keys => $item) {
+              if ($element[$trimmed_field_name]['#field_type'] == 'node_reference' && !empty($field_items[$keys]['nid'])) {
+                $nid = $field_items[$keys]['nid'];
+                $n_load = node_load($nid);
+                $n_view = node_view($n_load, 'technical_specs_ref');
+                $output = drupal_render($n_view);
+                $trim_output = trim($output);
+                if (empty($trim_output)) {
+                  $subject = str_replace($field, variable_get('ts_empty_symbol'), $subject);
+                }
+                else {
+                  if (empty($string)) {
+                    $string = $output;
+                  }
+                  else {
+                    $string .= $output;
+                  }
+                }
+              }
+              else {
+                $display_field = field_view_field('node', $node, $trimmed_field_name, 'technical_spec');
+                $output = render($display_field);
+                $replace = array('<td class="specs-value">', '</td>', '<tr>', '</tr>');
+                $output = str_replace($replace, "", $output);
+                $trim_output = trim($output);
+                if (empty($trim_output)) {
+                  $subject = str_replace($field, variable_get('ts_empty_symbol'), $subject);
+                }
+                else {
+                  if (empty($string)) {
+                    $string = $output;
+                  }
+                }
+              }
+            }
+            $subject = str_replace($field, $string, $subject);
+          }
+        }
+      }
+      else {
+        if (count($element[$trimmed_field_name]['#items']) == 1) {
+          $subject = str_replace($field, render($element[$trimmed_field_name][0]), $subject);
+        }
+        else {
+          $field_items = field_get_items('node', $node, $trimmed_field_name);
+          if (is_array($field_items)) {
+            $display_field = field_view_field('node', $node, $trimmed_field_name, 'technical_spec');
+            $output = render($display_field);
+            $replace = array('<td class="specs-value">', '</td>', '<tr>', '</tr>');
+            $output = str_replace($replace, "", $output);
+            $subject = str_replace($field, $output, $subject);
+          }
+        }
+      }
+    }
+    $field_counter = 0;
+    $field_amount = count($group->children);
+
+    foreach ($group->children as $key => $child) {
+      if (isset($element[$child]['#this_empty']) && $element[$child]['#this_empty'] == TRUE) {
+        $field_counter++;
+      }
+    }
+    if ($field_amount == $field_counter) {
+      if (isset($settings['hide_empty']) && $settings['hide_empty'] == 1) {
+        $subject = $settings['empty_symbol'];
+      }
+      else {
+        $subject = variable_get('ts_empty_symbol');
+      }
+    }
+    $end = substr(array_pop($all_fields), 1, -1);
+    if (!empty($element[$end])) {
+      $element[$end]['#group_name'] = $group->group_name;
+      $element[$end]['#custom_markup'] = $subject;
+      $element[$end]['#group_title'] = $group->label;
+    }
+  }
+  // Tooltips.
+  $qtip = '';
+  if (isset($settings['tooltip'])) {
+    $tooltip_text = $settings['tooltip'];
+    if (!empty($tooltip_text)) {
+      $qtip_help_image = theme('image', array(
+        'path' => base_path() . 'misc/help.png',
+      ));
+      $qtip = theme('qtip', array(
+        'content' => $qtip_help_image,
+        'instance' => 'tooltip',
+        'tooltip' => $tooltip_text,
+      ));
+    }
+  }
+  // Check all values.
+  $flag = FALSE;
+  foreach ($group->children as $child) {
+    if (isset($element[$child]['#items'])) {
+      $flag = TRUE;
+    }
+  }
+  // Table wrapper.
+  if ($flag) {
+    if (!empty($settings['template'])) {
+      $element['#prefix'] = '<tr><td class="specs-property">' . $group->label . $qtip . '</td><td class="specs-value">';
+      $element['#suffix'] = '</td></tr>';
+    }
+    else {
+      $path = '/admin/structure/types/manage/' . $node->type . '/display/technical_spec';
+      drupal_set_message('Please set template for ' . $group->label . ' group. To do this, go to: ' . l(t('Manage technical specs'), $path), 'error');
+    }
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ *
+ * Using hook_form_field_ui_display_overview_form_alter for override admin form.
+ */
+function formatters_form_field_ui_display_overview_form_alter(&$form, &$form_state) {
+  if ($form['#view_mode'] == 'technical_spec') {
+    $form['fields']['_add_new_group']['format']['type']['#default_value'] = 'tech_specs';
+    $form['fields']['_add_new_group']['format']['type']['#attributes']['disabled'] = 'disabled';
+    foreach ($form['#groups'] as $group) {
+      $form['fields'][$group]['format']['type']['#attributes']['disabled'] = 'disabled';
+    }
+
+    foreach ($form['#fields'] as $field) {
+      if (!empty($form['fields'][$field]['parent_wrapper']['parent']['#default_value'])) {
+        $form['fields'][$field]['label']['#default_value'] = 'hidden';
+        $form['fields'][$field]['label']['#attributes']['disabled'] = 'disabled';
+        $instances = _field_invoke_get_instances('node', $form['#bundle'], array('default' => TRUE, 'deleted' => FALSE));
+        if ($instances[$field]['widget']['module'] == 'node_reference') {
+          $form['fields'][$field]['format']['type']['#default_value'] = 'node_reference_nid';
+          $form['fields'][$field]['format']['type']['#attributes']['disabled'] = 'disabled';
+        }
+      }
+      $form['fields'][$field]['human_name']['#markup'] = $form['fields'][$field]['human_name']['#markup']
+        . ' <span class="field-input-wrapper"><input class="field-input" onClick="this.setSelectionRange(0, this.value.length)" type="text" name="copy" size="30"  value="[' . $field . ']" readonly></span>';
+    }
+  }
+  $form['#attached']['js'][] = drupal_get_path('module', 'formatters') . '/js/field-ui.js';
+  $form['#attached']['css'][] = drupal_get_path('module', 'formatters') . '/css/styles.css';
+}
+/**
+ * Implements hook_field_attach_view_alter().
+ *
+ * Show empty fields.
+ */
+function formatters_field_attach_view_alter(&$output, $context) {
+  // We proceed only on nodes.
+  if ($context['entity_type'] != 'node' || $context['view_mode'] != 'technical_spec') {
+    return;
+  }
+
+  $node = $context['entity'];
+  // Load all instances of the fields for the node.
+  $instances = _field_invoke_get_instances('node', $node->type, array('default' => TRUE, 'deleted' => FALSE));
+
+  foreach ($instances as $field_name => $instance) {
+    // Set content for fields they are empty.
+    if (empty($node->{$field_name})) {
+      $display = field_get_display($instance, 'technical_spec', $node);
+      // Do not add field that is hidden in current display.
+      if ($display['type'] == 'hidden') {
+        continue;
+      }
+      // Load field settings.
+      $field = field_info_field($field_name);
+      // Set output for field.
+      $output[$field_name] = array(
+        '#theme' => 'field',
+        '#title' => $instance['label'],
+        '#label_display' => 'above',
+        '#field_type' => $field['type'],
+        '#field_name' => $field_name,
+        '#bundle' => $node->type,
+        '#object' => $node,
+        '#this_empty' => TRUE,
+        '#items' => array(
+          0 => array(
+            'value' => variable_get('ts_empty_symbol'),
+          ),
+        ),
+        '#view_mode' => 'technical_spec',
+        '#entity_type' => 'node',
+        '#weight' => $display['weight'],
+        0 => array('#markup' => variable_get('ts_empty_symbol')),
+      );
+    }
+  }
+}

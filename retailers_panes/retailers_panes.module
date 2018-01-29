@@ -1,0 +1,30 @@
+<?php
+
+/**
+ * @file
+ * Blueplanet custom panes.
+ */
+
+/**
+ * Implements hook_ctools_plugin_directory().
+ */
+function retailers_panes_ctools_plugin_directory($owner, $plugin_type) {
+  if ($owner == 'ctools' && !empty($plugin_type)) {
+    return 'plugins/' . $plugin_type;
+  }
+}
+
+/**
+ * Implements hook_theme().
+ */
+function retailers_panes_theme() {
+  $module_path = drupal_get_path('module', 'retailers_panes');
+  $theme = array(
+    // Related.
+    'related_products' => array(
+      'template' => 'related_products',
+      'path' => $module_path . '/plugins/content_types/related_products',
+    ),
+  );
+  return $theme;
+}
